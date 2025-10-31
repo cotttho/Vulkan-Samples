@@ -63,14 +63,10 @@ void PostprocessingWithVgf::request_gpu_features(vkb::PhysicalDevice &gpu)
 	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceVulkan12Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, shaderInt8);
 	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceVulkan13Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, synchronization2);
 
-	// TODO: Re-enable this feature once the emulation layer advertises it
-	// REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceTensorFeaturesARM, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TENSOR_FEATURES_ARM, tensors);
-
 	// Enable the features for tensors and data graphs which we intend to use.
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceTensorFeaturesARM, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TENSOR_FEATURES_ARM, tensors);
 	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceTensorFeaturesARM, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TENSOR_FEATURES_ARM, shaderTensorAccess);
-
-	// TODO: Re-enable this feature once the emulation layer advertises it
-	// REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceDataGraphFeaturesARM, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DATA_GRAPH_FEATURES_ARM, dataGraph);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceDataGraphFeaturesARM, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DATA_GRAPH_FEATURES_ARM, dataGraph);
 
 	// Update-after-bind is required for the emulation layer
 	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceVulkan12Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, descriptorBindingUniformBufferUpdateAfterBind);
