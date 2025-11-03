@@ -262,12 +262,12 @@ void TensorImageAliasing::prepare_weights_tensor()
 	//	KW = Kernel width
 	//	IC = Input channels
 	// In this case we are using a simple edge-enhancement filter on each of the three colour channels
-	weights_constant_tensor->dimensions = {3, 3, 3, 3};
-	weights_constant_tensor->constant_data.resize(3 * 3 * 3 * 3);
+	weights_constant_tensor->dimensions = {4, 3, 3, 4};
+	weights_constant_tensor->constant_data.resize(4 * 3 * 3 * 4);
 	MultidimensionalArrayView<int8_t> array_view(
 	    weights_constant_tensor->constant_data.data(), weights_constant_tensor->dimensions);
 
-	for (int i = 0; i < 3; ++i)
+	for (int i = 0; i < 4; ++i)
 	{
 		// First row of the 3x3 kernel
 		array_view[{i, 0, 0, i}] = 0;

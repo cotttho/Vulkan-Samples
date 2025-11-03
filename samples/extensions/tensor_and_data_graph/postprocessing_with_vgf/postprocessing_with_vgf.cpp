@@ -369,7 +369,7 @@ void PostprocessingWithVgf::prepare_scene_render_target(uint32_t width, uint32_t
 void PostprocessingWithVgf::prepare_input_image()
 {
 	input_image = std::make_unique<vkb::core::Image>(vkb::core::ImageBuilder(scene_render_target->get_extent().width, scene_render_target->get_extent().height)
-	                                                     .with_format(VK_FORMAT_R8G8B8A8_SNORM)
+	                                                     .with_format(VK_FORMAT_R8G8B8A8_UNORM)
 	                                                     // Extra flags are required to allow aliasing of this image as a tensor.
 	                                                     .with_usage(VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TENSOR_ALIASING_BIT_ARM)
 	                                                     .with_vma_flags(VMA_ALLOCATION_CREATE_CAN_ALIAS_BIT)
