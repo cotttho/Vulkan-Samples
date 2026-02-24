@@ -23,33 +23,6 @@
 #include "vulkan_sample.h"
 
 /**
- * @struct TensorInfo
- * @brief Describes a tensor's binding, shape, and format.
- */
-struct TensorInfo
-{
-	uint32_t             binding;           ///< Binding index in the descriptor set.
-	std::vector<int64_t> dimensions;        ///< Tensor shape dimensions.
-	VkFormat             format;            ///< Format of the tensor data.
-	std::vector<int8_t>  data;              ///< Constant data.
-};
-
-/**
- * @struct VgfData
- * @brief Represents the deserialized contents of a VGF file.
- *
- * This structure encapsulates all relevant information extracted from a VGF binary,
- * including tensor metadata, shader code and the entry point name.
- */
-struct VgfData
-{
-	std::vector<TensorInfo> input_tensor_infos;
-	std::vector<TensorInfo> output_tensor_infos;
-	std::vector<uint32_t>   code;
-	std::string             entry_point;
-};
-
-/**
  * @brief Demonstrates how to use the VGF format, which stores information about the model such as SPIR-V,
           input information, output information and constant data used to run a data graph pipeline.
  * @details A 3D scene is rendered (using the existing Vulkan Sample framework) to an offscreen Render Target (`scene_render_target`),

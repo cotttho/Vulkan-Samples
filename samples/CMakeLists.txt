@@ -97,6 +97,7 @@ set(ORDER_LIST
     "compute_shaders_with_tensors"
     "tensor_image_aliasing"
     "postprocessing_with_vgf"
+    "camera_super_resolution"
 
     #Performance Samples
     "swapchain_images"

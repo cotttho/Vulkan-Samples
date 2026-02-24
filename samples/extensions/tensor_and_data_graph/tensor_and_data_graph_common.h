@@ -334,3 +334,30 @@ class BlitSubpass : public vkb::rendering::SubpassC
 	vkb::core::ImageView               *source          = nullptr;
 	std::unique_ptr<vkb::core::Sampler> sampler         = nullptr;
 };
+
+/**
+ * @struct TensorInfo
+ * @brief Describes a tensor's binding, shape, and format.
+ */
+struct TensorInfo
+{
+	uint32_t             binding;           ///< Binding index in the descriptor set.
+	std::vector<int64_t> dimensions;        ///< Tensor shape dimensions.
+	VkFormat             format;            ///< Format of the tensor data.
+	std::vector<int8_t>  data;              ///< Constant data.
+};
+
+/**
+ * @struct VgfData
+ * @brief Represents the deserialized contents of a VGF file.
+ *
+ * This structure encapsulates all relevant information extracted from a VGF binary,
+ * including tensor metadata, shader code and the entry point name.
+ */
+struct VgfData
+{
+	std::vector<TensorInfo> input_tensor_infos;
+	std::vector<TensorInfo> output_tensor_infos;
+	std::vector<uint32_t>   code;
+	std::string             entry_point;
+};
