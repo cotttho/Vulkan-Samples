@@ -361,3 +361,26 @@ struct VgfData
 	std::vector<uint32_t>   code;
 	std::string             entry_point;
 };
+
+/**
+ * @brief Loads and parses a VGF (Vulkan Graph Format) file.
+ * 
+ * This function reads a VGF file, parses its contents, and extracts tensor information,
+ * SPIR-V shader code, and constant tensors. Supports multiple input and output tensors.
+ * Currently supports single-module VGF files only.
+ * 
+ * Features:
+ * - Validates VGF header compatibility
+ * - Extracts all input tensors (supports multiple inputs)
+ * - Extracts all output tensors (supports multiple outputs)
+ * - Loads constant tensors with correct IDs
+ * - Retrieves SPIR-V module code and entry point
+ * 
+ * @param vgf_file_path Path to the VGF file to load
+ * @param constant_tensors Output vector to store extracted constant tensors with proper IDs
+ * @return VgfData structure containing input/output tensor info, SPIR-V code, and entry point
+ * @throws std::runtime_error if the file cannot be loaded, is invalid, contains multiple modules,
+ *         has no inputs/outputs, or contains corrupt data
+ */
+VgfData load_vgf(const std::string &vgf_file_path, 
+                 std::vector<std::unique_ptr<PipelineConstantTensor<int8_t>>> &constant_tensors);

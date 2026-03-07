@@ -20,7 +20,7 @@ include_directories(${VGF_LIB_INCLUDE_DIR})
 
 add_sample_with_tags(
     ID "camera_super_resolution"
-    CATEGORY "extensions/tensor_and_data_graph"
+    CATEGORY "camera"
     AUTHOR "Arm Ltd."
     NAME "Camera Super Resolution (XLSR)"
     DESCRIPTION "Demonstrates machine learning inference using XLSR super resolution model"
@@ -35,6 +35,6 @@ add_sample_with_tags(
         "camera_super_resolution.cpp"
         "camera_super_resolution.h"
     SHADER_FILES_GLSL
-        "tensor_and_data_graph/camera_super_resolution/camera_visualization.comp"
+        "camera/camera_super_resolution/camera_visualization.comp"
     SHADER_FILES_SPVASM
 )

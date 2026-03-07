@@ -20,6 +20,10 @@
 #include <list>
 #include <rendering/render_context.h>
 #include <spirv_glsl.hpp>
+#include <filesystem/filesystem.hpp>
+
+// VGF decoder includes
+#include <vgf/decoder.h>
 
 void write_descriptor_set(VkDevice                                                 device,
                           VkDescriptorSet                                          set,
@@ -704,7 +708,7 @@ ComputePipelineWithTensors::~ComputePipelineWithTensors()
 }
 
 BlitSubpass::BlitSubpass(vkb::RenderContext &renderContext, vkb::core::ImageView *source) :
-    vkb::rendering::SubpassC(renderContext, vkb::ShaderSource{"tensor_and_data_graph/glsl/fullscreen.vert.spv"}, vkb::ShaderSource{"tensor_and_data_graph/glsl/blit.frag.spv"}),
+    vkb::rendering::SubpassC(renderContext, vkb::ShaderSource{"camera/glsl/fullscreen.vert.spv"}, vkb::ShaderSource{"camera/glsl/blit.frag.spv"}),
     source(source)
 {
 }
@@ -712,9 +716,9 @@ BlitSubpass::BlitSubpass(vkb::RenderContext &renderContext, vkb::core::ImageView
 void BlitSubpass::prepare()
 {
 	vkb::ShaderModule &fullscreen_vert =
-	    get_render_context().get_device().get_resource_cache().request_shader_module(VK_SHADER_STAGE_VERTEX_BIT, vkb::ShaderSource{"tensor_and_data_graph/glsl/fullscreen.vert.spv"});
+	    get_render_context().get_device().get_resource_cache().request_shader_module(VK_SHADER_STAGE_VERTEX_BIT, vkb::ShaderSource{"camera/glsl/fullscreen.vert.spv"});
 	vkb::ShaderModule &blit_frag =
-	    get_render_context().get_device().get_resource_cache().request_shader_module(VK_SHADER_STAGE_FRAGMENT_BIT, vkb::ShaderSource{"tensor_and_data_graph/glsl/blit.frag.spv"});
+	    get_render_context().get_device().get_resource_cache().request_shader_module(VK_SHADER_STAGE_FRAGMENT_BIT, vkb::ShaderSource{"camera/glsl/blit.frag.spv"});
 	pipeline_layout = &get_render_context().get_device().get_resource_cache().request_pipeline_layout({&fullscreen_vert, &blit_frag});
 
 	VkSamplerCreateInfo sampler_create_info{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
@@ -744,4 +748,233 @@ void BlitSubpass::draw(vkb::core::CommandBufferC &command_buffer)
 	command_buffer.bind_pipeline_layout(*pipeline_layout);
 	command_buffer.bind_image(*source, *sampler, 0, 0, 0);
 	command_buffer.draw(3, 1, 0, 0);
+}
+
+VgfData load_vgf(const std::string &vgf_file_path, 
+                 std::vector<std::unique_ptr<PipelineConstantTensor<int8_t>>> &constant_tensors)
+{
+	std::vector<uint8_t> vgf_buffer = vkb::filesystem::get()->read_file_binary(vgf_file_path);
+
+	if (vgf_buffer.size() == 0)
+	{
+		throw std::runtime_error("Error loading VGF file: " + vgf_file_path);
+	}
+
+	// Parse VGF header which contains details of other sections in the file.
+	std::vector<uint8_t>          header_decoder_memory(mlsdk_decoder_header_decoder_mem_reqs());
+	mlsdk_decoder_header_decoder *header_decoder =
+	    mlsdk_decoder_create_header_decoder(vgf_buffer.data(), header_decoder_memory.data());
+
+	if (!mlsdk_decoder_is_header_valid(header_decoder))
+	{
+		throw std::runtime_error("VGF header is not valid.");
+	}
+	if (!mlsdk_decoder_is_header_compatible(header_decoder))
+	{
+		throw std::runtime_error("VGF header is not compatible.");
+	}
+
+	// Create decoder objects for each section in the VGF that we care about:
+	//		Module Table:
+	//			Each module is either a compute shader or a data graph.
+	//			The order of these is arbitrary and there is a further information in the VGF
+	//			that describes how to run these.
+	//		Model Resource Table:
+	//			This is a list of tensor descriptions (data formats, size etc.) which is indexed
+	//			into by other fields in the VGF.
+	//		Model Sequence:
+	//			This defines the order that the modules should be executed in as well as their inputs and outputs.
+	//		Constant table:
+	//			Contains the raw constant data for all constant tensors used in the model.
+	mlsdk_decoder_vgf_section_info section_infos[4];
+	for (mlsdk_decoder_section section_type = mlsdk_decoder_section_modules;
+	     section_type <= mlsdk_decoder_section_constants;
+	     section_type = mlsdk_decoder_section(section_type + 1))
+	{
+		mlsdk_decoder_get_header_section_info(header_decoder, section_type, &section_infos[section_type]);
+
+		if (section_infos[section_type].offset + section_infos[section_type].size > vgf_buffer.size())
+		{
+			throw std::runtime_error("Corrupt VGF header (section out of bounds).");
+		}
+	}
+
+	// Get the decoders
+	std::vector<uint8_t> module_table_decoder_memory(mlsdk_decoder_module_table_decoder_mem_reqs());
+	std::vector<uint8_t> model_resource_table_decoder_memory(mlsdk_decoder_model_resource_table_decoder_mem_reqs());
+	std::vector<uint8_t> model_sequence_decoder_memory(mlsdk_decoder_model_sequence_decoder_mem_reqs());
+	std::vector<uint8_t> constant_table_decoder_memory(mlsdk_decoder_constant_table_decoder_mem_reqs());
+
+	mlsdk_decoder_module_table_decoder *module_table_decoder =
+	    mlsdk_decoder_create_module_table_decoder(
+	        vgf_buffer.data() + section_infos[mlsdk_decoder_section_modules].offset,
+	        module_table_decoder_memory.data());
+
+	mlsdk_decoder_model_resource_table_decoder *model_resource_table_decoder =
+	    mlsdk_decoder_create_model_resource_table_decoder(
+	        vgf_buffer.data() + section_infos[mlsdk_decoder_section_resources].offset,
+	        model_resource_table_decoder_memory.data());
+
+	mlsdk_decoder_model_sequence_decoder *model_sequence_decoder =
+	    mlsdk_decoder_create_model_sequence_decoder(
+	        vgf_buffer.data() + section_infos[mlsdk_decoder_section_model_sequence].offset,
+	        model_sequence_decoder_memory.data());
+
+	mlsdk_decoder_constant_table_decoder *constant_table_decoder =
+	    mlsdk_decoder_create_constant_table_decoder(
+	        vgf_buffer.data() + section_infos[mlsdk_decoder_section_constants].offset,
+	        constant_table_decoder_memory.data());
+
+	if (!module_table_decoder)
+		throw std::runtime_error("Failed to create module table decoder.");
+	if (!model_resource_table_decoder)
+		throw std::runtime_error("Failed to create module resource table decoder.");
+	if (!model_sequence_decoder)
+		throw std::runtime_error("Failed to create module sequence decoder.");
+	if (!constant_table_decoder)
+		throw std::runtime_error("Failed to create constant table decoder.");
+
+	size_t num_modules = mlsdk_decoder_get_module_table_num_entries(module_table_decoder);
+	if (num_modules != 1)
+	{
+		throw std::runtime_error("Only a single module VGF is supported.");
+	}
+
+	std::vector<TensorInfo> all_tensor_infos;
+	std::vector<TensorInfo> input_tensor_infos;
+	std::vector<TensorInfo> output_tensor_infos;
+
+	size_t num_resource_entries = mlsdk_decoder_get_model_resource_table_num_entries(model_resource_table_decoder);
+	all_tensor_infos.reserve(num_resource_entries);
+
+	// Get all resources TensorInfo
+	for (int resource_idx = 0; resource_idx < num_resource_entries; ++resource_idx)
+	{
+		mlsdk_vk_format vk_format = mlsdk_decoder_get_vk_format(model_resource_table_decoder, resource_idx);
+
+		mlsdk_decoder_tensor_dimensions dims_raw;
+		mlsdk_decoder_model_resource_table_get_tensor_shape(model_resource_table_decoder, resource_idx, &dims_raw);
+		std::vector<int64_t> tensor_shape(dims_raw.data, dims_raw.data + dims_raw.size);
+
+		TensorInfo tensor_info;
+		tensor_info.binding    = resource_idx;
+		tensor_info.dimensions = tensor_shape;
+		tensor_info.format     = static_cast<VkFormat>(vk_format);
+
+		all_tensor_infos.push_back(tensor_info);
+	}
+
+	// Get the constants used in model.
+	size_t num_model_constants = mlsdk_decoder_get_constant_table_num_entries(constant_table_decoder);
+
+	mlsdk_decoder_constant_indexes constant_indexes;
+	mlsdk_decoder_model_sequence_get_segment_constant_indexes(model_sequence_decoder, 0, &constant_indexes);
+
+	for (uint32_t idx = 0; idx < constant_indexes.size; ++idx)
+	{
+		int model_constant_idx = constant_indexes.data[idx];
+		if (model_constant_idx >= num_model_constants)
+		{
+			throw std::runtime_error("Corrupt VGF (segment constant idx out of bounds).");
+		}
+
+		uint32_t resource_index = mlsdk_decoder_constant_table_get_mrt_index(constant_table_decoder, model_constant_idx);
+		if (resource_index >= num_resource_entries)
+		{
+			throw std::runtime_error("Corrupt VGF (constant resource idx out of bounds)");
+		}
+
+		mlsdk_decoder_constant_data constant_data;
+		mlsdk_decoder_constant_table_get_data(constant_table_decoder, model_constant_idx, &constant_data);
+
+		std::vector<int8_t> vector_data(constant_data.data, constant_data.data + constant_data.size);
+
+		// Now that we have the constant data and tensor info, we can populate the PipelineConstantTensor.
+		constant_tensors.push_back(std::make_unique<PipelineConstantTensor<int8_t>>());
+
+		constant_tensors[idx]->dimensions     = all_tensor_infos[resource_index].dimensions;
+		constant_tensors[idx]->constant_data  = std::move(vector_data);
+
+		constant_tensors[idx]->tensor_description = {
+		    VK_STRUCTURE_TYPE_TENSOR_DESCRIPTION_ARM,
+		    nullptr,
+		    VK_TENSOR_TILING_LINEAR_ARM,
+		    all_tensor_infos[resource_index].format,
+		    static_cast<uint32_t>(constant_tensors[idx]->dimensions.size()),
+		    constant_tensors[idx]->dimensions.data(),
+		    nullptr,
+		    VK_TENSOR_USAGE_DATA_GRAPH_BIT_ARM,
+		};
+
+		constant_tensors[idx]->pipeline_constant = {
+		    VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_CONSTANT_ARM,
+		    &constant_tensors[idx]->tensor_description,
+		    static_cast<uint32_t>(model_constant_idx),  // Matches the unique identifier encoded in OpGraphConstantARM in the SPIR-V module
+		    constant_tensors[idx]->constant_data.data() // Host pointer to raw data
+		};
+	}
+
+	// Get all inputs (support multiple inputs)
+	{
+		mlsdk_decoder_binding_slots_handle input_handle = mlsdk_decoder_model_sequence_get_input_binding_slot(model_sequence_decoder);
+		size_t num_inputs = mlsdk_decoder_binding_slot_size(model_sequence_decoder, input_handle);
+		
+		if (num_inputs == 0)
+		{
+			throw std::runtime_error("VGF has no input tensors defined.");
+		}
+		
+		for (size_t i = 0; i < num_inputs; ++i)
+		{
+			uint32_t resource_index = mlsdk_decoder_binding_slot_mrt_index(model_sequence_decoder, input_handle, static_cast<uint32_t>(i));
+			uint32_t binding_id     = mlsdk_decoder_binding_slot_binding_id(model_sequence_decoder, input_handle, static_cast<uint32_t>(i));
+
+			if (resource_index >= num_resource_entries)
+			{
+				throw std::runtime_error("Corrupt VGF (input resource idx out of bounds)");
+			}
+
+			all_tensor_infos[resource_index].binding = binding_id;
+			input_tensor_infos.push_back(all_tensor_infos[resource_index]);
+		}
+	}
+
+	// Get all outputs (support multiple outputs)
+	{
+		mlsdk_decoder_binding_slots_handle output_handle = mlsdk_decoder_model_sequence_get_output_binding_slot(model_sequence_decoder);
+		size_t num_outputs = mlsdk_decoder_binding_slot_size(model_sequence_decoder, output_handle);
+		
+		if (num_outputs == 0)
+		{
+			throw std::runtime_error("VGF has no output tensors defined.");
+		}
+		
+		for (size_t i = 0; i < num_outputs; ++i)
+		{
+			uint32_t resource_index = mlsdk_decoder_binding_slot_mrt_index(model_sequence_decoder, output_handle, static_cast<uint32_t>(i));
+			uint32_t binding_id     = mlsdk_decoder_binding_slot_binding_id(model_sequence_decoder, output_handle, static_cast<uint32_t>(i));
+
+			if (resource_index >= num_resource_entries)
+			{
+				throw std::runtime_error("Corrupt VGF (output resource idx out of bounds)");
+			}
+
+			all_tensor_infos[resource_index].binding = binding_id;
+			output_tensor_infos.push_back(all_tensor_infos[resource_index]);
+		}
+	}
+
+	int32_t module_index = mlsdk_decoder_model_sequence_get_segment_module_index(model_sequence_decoder, 0);
+
+	mlsdk_decoder_spirv_code spirv_code;
+	mlsdk_decoder_get_module_code(module_table_decoder, module_index, &spirv_code);
+	if (!spirv_code.code || spirv_code.words == 0)
+	{
+		throw std::runtime_error("Missing SPIRV code for module.");
+	}
+
+	std::vector<uint32_t> code(spirv_code.code, spirv_code.code + spirv_code.words);
+	const char           *entry_point = mlsdk_decoder_get_module_entry_point(module_table_decoder, module_index);
+
+	return {input_tensor_infos, output_tensor_infos, code, entry_point};
 }

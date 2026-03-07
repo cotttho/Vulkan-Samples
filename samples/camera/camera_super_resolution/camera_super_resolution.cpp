@@ -91,7 +91,7 @@ bool CameraSuperResolution::prepare(const vkb::ApplicationOptions &options)
    // Create Vulkan resources
    prepare_descriptor_pool();
 
-   vgf_data = load_vgf("shaders/tensor_and_data_graph/camera_super_resolution/vgf/ai_benchmark_v5_xlsr_quant.tflite.mlirbc.vgf");
+   vgf_data = load_vgf("shaders/camera/camera_super_resolution/vgf/ai_benchmark_v5_xlsr_quant.tflite.mlirbc.vgf", constant_tensors);
 
    prepare_input_tensor();
    prepare_output_tensor();
@@ -135,7 +135,7 @@ void CameraSuperResolution::prepare_descriptor_pool()
 */
 void CameraSuperResolution::prepare_input_tensor()
 {
-   auto image_data = vkb::filesystem::get()->read_file_binary("shaders/tensor_and_data_graph/camera_super_resolution/assets/div2k_007_lr.png");
+   auto image_data = vkb::filesystem::get()->read_file_binary("shaders/camera/camera_super_resolution/assets/div2k_007_lr.png");
    int width, height, channels;
    unsigned char* pixels = stbi_load_from_memory(image_data.data(), static_cast<int>(image_data.size()), &width, &height, &channels, 3);
 
@@ -196,207 +196,6 @@ void CameraSuperResolution::prepare_output_image(uint32_t width, uint32_t height
    output_image_view = std::make_unique<vkb::core::ImageView>(*output_image, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R8G8B8A8_UNORM);
 }
 
-
-VgfData CameraSuperResolution::load_vgf(const std::string &vgf_file_path)
-{
-   std::vector<uint8_t> vgf_buffer = vkb::filesystem::get()->read_file_binary(vgf_file_path);
-
-   if (vgf_buffer.size() == 0)
-   {
-	   throw std::runtime_error("Error loading VGF file: " + vgf_file_path);
-   }
-
-   // Parse VGF header which contains details of other sections in the file.
-   std::vector<uint8_t>          header_decoder_memory(mlsdk_decoder_header_decoder_mem_reqs());
-   mlsdk_decoder_header_decoder *header_decoder =
-	   mlsdk_decoder_create_header_decoder(vgf_buffer.data(), header_decoder_memory.data());
-
-   if (!mlsdk_decoder_is_header_valid(header_decoder))
-   {
-	   throw std::runtime_error("VGF header is not valid.");
-   }
-   if (!mlsdk_decoder_is_header_compatible(header_decoder))
-   {
-	   throw std::runtime_error("VGF header is not compatible.");
-   }
-
-   // Create decoder objects for each section in the VGF that we care about:
-   //		Module Table:
-   //			Each module is either a compute shader or a data graph.
-   //			The order of these is arbitrary and there is a further information in the VGF
-   //			that describes how to run these.
-   //		Model Resource Table:
-   //			This is a list of tensor descriptions (data formats, size etc.) which is indexed
-   //			into by other fields in the VGF.
-   //		Model Sequence:
-   //			This defines the order that the modules should be executed in as well as their inputs and outputs.
-   //		Constant table:
-   //			Contains the raw constant data for all constant tensors used in the model.
-   mlsdk_decoder_vgf_section_info section_infos[4];
-   for (mlsdk_decoder_section section_type = mlsdk_decoder_section_modules;
-		section_type <= mlsdk_decoder_section_constants;
-		section_type = mlsdk_decoder_section(section_type + 1))
-   {
-	   mlsdk_decoder_get_header_section_info(header_decoder, section_type, &section_infos[section_type]);
-
-	   if (section_infos[section_type].offset + section_infos[section_type].size > vgf_buffer.size())
-	   {
-		   throw std::runtime_error("Corrupt VGF header (section out of bounds).");
-	   }
-   }
-
-   // Get the decoders
-   std::vector<uint8_t> module_table_decoder_memory(mlsdk_decoder_module_table_decoder_mem_reqs());
-   std::vector<uint8_t> model_resource_table_decoder_memory(mlsdk_decoder_model_resource_table_decoder_mem_reqs());
-   std::vector<uint8_t> model_sequence_decoder_memory(mlsdk_decoder_model_sequence_decoder_mem_reqs());
-   std::vector<uint8_t> constant_table_decoder_memory(mlsdk_decoder_constant_table_decoder_mem_reqs());
-
-   mlsdk_decoder_module_table_decoder *module_table_decoder =
-	   mlsdk_decoder_create_module_table_decoder(
-		   vgf_buffer.data() + section_infos[mlsdk_decoder_section_modules].offset,
-		   module_table_decoder_memory.data());
-
-   mlsdk_decoder_model_resource_table_decoder *model_resource_table_decoder =
-	   mlsdk_decoder_create_model_resource_table_decoder(
-		   vgf_buffer.data() + section_infos[mlsdk_decoder_section_resources].offset,
-		   model_resource_table_decoder_memory.data());
-
-   mlsdk_decoder_model_sequence_decoder *model_sequence_decoder =
-	   mlsdk_decoder_create_model_sequence_decoder(
-		   vgf_buffer.data() + section_infos[mlsdk_decoder_section_model_sequence].offset,
-		   model_sequence_decoder_memory.data());
-
-   mlsdk_decoder_constant_table_decoder *constant_table_decoder =
-	   mlsdk_decoder_create_constant_table_decoder(
-		   vgf_buffer.data() + section_infos[mlsdk_decoder_section_constants].offset,
-		   constant_table_decoder_memory.data());
-
-   if (!module_table_decoder)
-	   throw std::runtime_error("Failed to create module table decoder.");
-   if (!model_resource_table_decoder)
-	   throw std::runtime_error("Failed to create module resource table decoder.");
-   if (!model_sequence_decoder)
-	   throw std::runtime_error("Failed to create module sequence decoder.");
-   if (!constant_table_decoder)
-	   throw std::runtime_error("Failed to create constant table decoder.");
-
-   size_t num_modules = mlsdk_decoder_get_module_table_num_entries(module_table_decoder);
-   if (num_modules != 1)
-   {
-	   throw std::runtime_error("Only a single module VGF is supported.");
-   }
-
-   std::vector<TensorInfo> all_tensor_infos;
-   std::vector<TensorInfo> input_tensor_infos;
-   std::vector<TensorInfo> output_tensor_infos;
-
-   size_t num_resource_entries = mlsdk_decoder_get_model_resource_table_num_entries(model_resource_table_decoder);
-   all_tensor_infos.reserve(num_resource_entries);
-
-   // Get all resources TensorInfo
-   for (int resource_idx = 0; resource_idx < num_resource_entries; ++resource_idx)
-   {
-	   mlsdk_vk_format vk_format = mlsdk_decoder_get_vk_format(model_resource_table_decoder, resource_idx);
-
-	   mlsdk_decoder_tensor_dimensions dims_raw;
-	   mlsdk_decoder_model_resource_table_get_tensor_shape(model_resource_table_decoder, resource_idx, &dims_raw);
-	   std::vector<int64_t> tensor_shape(dims_raw.data, dims_raw.data + dims_raw.size);
-
-	   TensorInfo tensor_info;
-	   tensor_info.binding    = resource_idx;
-	   tensor_info.dimensions = tensor_shape;
-	   tensor_info.format     = static_cast<VkFormat>(vk_format);
-
-	   all_tensor_infos.push_back(tensor_info);
-   }
-
-   // Get the constants used in model.
-   size_t num_model_constants = mlsdk_decoder_get_constant_table_num_entries(constant_table_decoder);
-
-   mlsdk_decoder_constant_indexes constant_indexes;
-   mlsdk_decoder_model_sequence_get_segment_constant_indexes(model_sequence_decoder, 0, &constant_indexes);
-
-   for (uint32_t idx = 0; idx < constant_indexes.size; ++idx)
-   {
-	   int model_constant_idx = constant_indexes.data[idx];
-	   if (model_constant_idx >= num_model_constants)
-	   {
-		   throw std::runtime_error("Corrupt VGF (segment constant idx out of bounds).");
-	   }
-
-	   uint32_t resource_index = mlsdk_decoder_constant_table_get_mrt_index(constant_table_decoder, model_constant_idx);
-	   if (resource_index >= num_resource_entries)
-	   {
-		   throw std::runtime_error("Corrupt VGF (constant resource idx out of bounds)");
-	   }
-
-	   mlsdk_decoder_constant_data constant_data;
-	   mlsdk_decoder_constant_table_get_data(constant_table_decoder, model_constant_idx, &constant_data);
-
-	   std::vector<int8_t> vector_data(constant_data.data, constant_data.data + constant_data.size);
-
-	   // Now that we have the constant data and tensor info, we can populate the PipelineConstantTensor.
-	   constant_tensors.push_back(std::make_unique<PipelineConstantTensor<int8_t>>());
-
-	   constant_tensors[idx]->dimensions = all_tensor_infos[resource_index].dimensions;
-	   //sconstant_tensors[idx]->constant_data.resize(all_tensor_infos[resource_index].dimensions.size());
-	   constant_tensors[idx]->constant_data = std::move(vector_data);
-
-	   constant_tensors[idx]->tensor_description = {
-		   VK_STRUCTURE_TYPE_TENSOR_DESCRIPTION_ARM,
-		   nullptr,
-		   VK_TENSOR_TILING_LINEAR_ARM,
-		   all_tensor_infos[resource_index].format,
-		   static_cast<uint32_t>(constant_tensors[idx]->dimensions.size()),
-		   constant_tensors[idx]->dimensions.data(),
-		   nullptr,
-		   VK_TENSOR_USAGE_DATA_GRAPH_BIT_ARM,
-	   };
-
-	   constant_tensors[idx]->pipeline_constant = {
-		   VK_STRUCTURE_TYPE_DATA_GRAPH_PIPELINE_CONSTANT_ARM,
-		   &constant_tensors[idx]->tensor_description,
-		   idx,                                               // Matches the unique identifier encoded in OpGraphConstantARM in the SPIR-V module
-		   constant_tensors[idx]->constant_data.data()        // Host pointer to raw data
-	   };
-   }
-
-   // Input
-   {
-	   uint32_t resource_index = mlsdk_decoder_binding_slot_mrt_index(model_sequence_decoder,
-																	  mlsdk_decoder_model_sequence_get_input_binding_slot(model_sequence_decoder), 0);
-	   uint32_t binding_id     = mlsdk_decoder_binding_slot_binding_id(model_sequence_decoder,
-																	   mlsdk_decoder_model_sequence_get_input_binding_slot(model_sequence_decoder), 0);
-
-	   all_tensor_infos[resource_index].binding = binding_id;
-	   input_tensor_infos.push_back(all_tensor_infos[resource_index]);
-   }
-
-   // Output
-   {
-	   uint32_t resource_index = mlsdk_decoder_binding_slot_mrt_index(model_sequence_decoder,
-																	  mlsdk_decoder_model_sequence_get_output_binding_slot(model_sequence_decoder), 0);
-	   uint32_t binding_id     = mlsdk_decoder_binding_slot_binding_id(model_sequence_decoder,
-																	   mlsdk_decoder_model_sequence_get_output_binding_slot(model_sequence_decoder), 0);
-
-	   all_tensor_infos[resource_index].binding = binding_id;
-	   output_tensor_infos.push_back(all_tensor_infos[resource_index]);
-   }
-
-   int32_t module_index = mlsdk_decoder_model_sequence_get_segment_module_index(model_sequence_decoder, 0);
-
-   mlsdk_decoder_spirv_code spirv_code;
-   mlsdk_decoder_get_module_code(module_table_decoder, module_index, &spirv_code);
-   if (!spirv_code.code || spirv_code.words == 0)
-   {
-	   throw std::runtime_error("Missing SPIRV code for module.");
-   }
-
-   std::vector<uint32_t> code(spirv_code.code, spirv_code.code + spirv_code.words);
-   const char           *entry_point = mlsdk_decoder_get_module_entry_point(module_table_decoder, 0);
-
-   return {input_tensor_infos, output_tensor_infos, code, entry_point};
-}
 
 /*
 * Creates the Pipeline Layout, a Data Graph Pipeline and a Data Graph Pipeline Session used to run the neural network.
@@ -478,7 +277,7 @@ void CameraSuperResolution::prepare_visualization_pipeline()
    // Load the compute shader
 
    vkb::ShaderModule &visualization_comp =
-	   get_device().get_resource_cache().request_shader_module(VK_SHADER_STAGE_COMPUTE_BIT, vkb::ShaderSource{"tensor_and_data_graph/camera_super_resolution/camera_visualization.comp.spv"});
+	   get_device().get_resource_cache().request_shader_module(VK_SHADER_STAGE_COMPUTE_BIT, vkb::ShaderSource{"camera/camera_super_resolution/camera_visualization.comp.spv"});
 
    // Create pipeline layout from the reflected shader code. Note that this will include bindings to Tensor resources, so we use our own
    // class to do this, rather than the sample framework's vkb::PipelineLayout.

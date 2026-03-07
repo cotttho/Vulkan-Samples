@@ -43,7 +43,6 @@ class CameraSuperResolution : public vkb::VulkanSampleC
    void draw_renderpass(vkb::core::CommandBufferC &command_buffer, RenderTargetType &render_target) override;
 
    void draw_gui() override;
-   VgfData load_vgf(const std::string &vgf_file_path);
 
  private:
    void prepare_descriptor_pool();
