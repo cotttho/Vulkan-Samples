@@ -12,19 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+set(VGF_LIB_ROOT "${CMAKE_SOURCE_DIR}/third_party/ai-ml-sdk-vgf-library")
+
+# Include directories
+set(VGF_LIB_INCLUDE_DIR "${VGF_LIB_ROOT}/include-c")
+include_directories(${VGF_LIB_INCLUDE_DIR})
 
 add_sample_with_tags(
-        ID "camera_super_resolution"
-        CATEGORY "extensions/tensor_and_data_graph"
-        AUTHOR "Arm Ltd."
-        NAME "Camera Super Resolution (XLSR)"
-        DESCRIPTION "Demonstrates machine learning inference using XLSR super resolution model"
-        TAGS
+    ID "camera_super_resolution"
+    CATEGORY "extensions/tensor_and_data_graph"
+    AUTHOR "Arm Ltd."
+    NAME "Camera Super Resolution (XLSR)"
+    DESCRIPTION "Demonstrates machine learning inference using XLSR super resolution model"
+    LIBS
+        vgf
+    TAGS
         "arm"
-        FILES
+    FILES
+        ${VGF_LIB_INCLUDE_DIR}/vgf/decoder.h
+        "../tensor_and_data_graph_common.h"
+        "../tensor_and_data_graph_common.cpp"
         "camera_super_resolution.cpp"
         "camera_super_resolution.h"
-        SHADER_FILES_GLSL
+    SHADER_FILES_GLSL
         "tensor_and_data_graph/camera_super_resolution/camera_visualization.comp"
-        SHADER_FILES_SPVASM
+    SHADER_FILES_SPVASM
 )

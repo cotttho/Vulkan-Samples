@@ -150,6 +150,11 @@ if(VKB_BUILD_SAMPLES)
     add_subdirectory(samples)
 endif()
 
+if(VKB_BUILD_TESTS)
+    # Add tests
+    add_subdirectory(tests)
+endif()
+
 # Add vulkan app (runs all samples)
 add_subdirectory(app)
 endif ()
