@@ -63,7 +63,7 @@ struct Font
 {
 	/**
 	 * @brief Constructor
-	 * @param name_ The name of the font file that exists within 'assets/fonts' (without extension)
+	 * @param name_ The name of the font file that exists within 'resources/fonts' (without extension)
 	 * @param size_ The font size, scaled by DPI
 	 */
 	Font(const std::string &name_, float size_) :

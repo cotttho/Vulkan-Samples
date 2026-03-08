@@ -7,7 +7,7 @@
 function(gatherAntoraAssets)
     set(DIRS_TO_SEARCH
             app
-            assets
+            resources
             components
             docs
             framework

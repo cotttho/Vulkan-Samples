@@ -63,7 +63,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE vkb__core vkb__filesystem apps plu
 if(ANDROID)
     if(CMAKE_VS_NsightTegra_VERSION)
         set_property(TARGET ${PROJECT_NAME} PROPERTY ANDROID_GUI ON)
-        set_property(TARGET ${PROJECT_NAME} PROPERTY ANDROID_ASSETS_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/../assets)
+        set_property(TARGET ${PROJECT_NAME} PROPERTY ANDROID_ASSETS_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/../resources)
         set_property(TARGET ${PROJECT_NAME} PROPERTY ANDROID_JAVA_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../bldsys/android/java)
     endif()
     
@@ -72,14 +72,14 @@ if(ANDROID)
         add_android_package_project(
             NAME ${PROJECT_NAME}_package
             DEPENDS ${PROJECT_NAME}
-            ASSET_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/../assets
+            ASSET_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/../resources
             JAVA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/android/java
             RES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/android/res
             MANIFEST_FILE ${CMAKE_CURRENT_SOURCE_DIR}/android/AndroidManifest.xml)
     endif()
 
-    # Sync assets and shaders
-    android_sync_folder(PATH ${CMAKE_CURRENT_SOURCE_DIR}/../assets)
+    # Sync resources and shaders
+    android_sync_folder(PATH ${CMAKE_CURRENT_SOURCE_DIR}/../resources)
     android_sync_folder(PATH ${CMAKE_CURRENT_SOURCE_DIR}/../shaders)
 endif()
 
@@ -147,7 +147,7 @@ if(IOS)
         )
     endif ()
     target_sources(${PROJECT_NAME} PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/../assets
+            ${CMAKE_CURRENT_SOURCE_DIR}/../resources
             ${CMAKE_CURRENT_SOURCE_DIR}/../shaders
             ${CMAKE_CURRENT_SOURCE_DIR}/ios/launch.storyboard
             ${CMAKE_CURRENT_SOURCE_DIR}/ios/Storyboard.storyboard
@@ -155,7 +155,7 @@ if(IOS)
     set_source_files_properties(
             ${CMAKE_CURRENT_SOURCE_DIR}/ios/launch.storyboard
             ${CMAKE_CURRENT_SOURCE_DIR}/ios/Storyboard.storyboard
-            ${CMAKE_CURRENT_SOURCE_DIR}/../assets
+            ${CMAKE_CURRENT_SOURCE_DIR}/../resources
             ${CMAKE_CURRENT_SOURCE_DIR}/../shaders
             PROPERTIES
             MACOSX_PACKAGE_LOCATION Resources
