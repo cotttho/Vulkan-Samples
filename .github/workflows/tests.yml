@@ -1,0 +1,91 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Install Vulkan SDK
+      run: |
+        wget -q https://sdk.lunarg.com/sdk/download/latest/mac/vulkan_sdk.dmg
+        hdiutil attach vulkan_sdk.dmg
+        sudo /Volumes/vulkansdk-macos-*/InstallVulkan.app/Contents/MacOS/InstallVulkan --root ~/VulkanSDK --accept-licenses --default-answer --confirm-command install
+        hdiutil detach /Volumes/vulkansdk-macos-*
+    
+    - name: Set up Vulkan environment
+      run: |
+        echo "VULKAN_SDK=$HOME/VulkanSDK/$(ls $HOME/VulkanSDK)/macOS" >> $GITHUB_ENV
+        source $HOME/VulkanSDK/$(ls $HOME/VulkanSDK)/setup-env.sh
+    
+    - name: Configure CMake
+      run: |
+        cmake -G Xcode -Bbuild/mac-xcode \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_OSX_SYSROOT=macosx \
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+          -DVKB_BUILD_TESTS=ON \
+          -DVKB_BUILD_SAMPLES=ON
+    
+    - name: Build
+      run: cmake --build build/mac-xcode --config Release --target all -j$(sysctl -n hw.ncpu)
+    
+    - name: Run Tests
+      run: |
+        cd build/mac-xcode
+        ctest --output-on-failure -C Release
+    
+    - name: Upload Test Results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results-macos
+        path: build/mac-xcode/Testing/Temporary/LastTest.log
+
+  test-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake g++ xorg-dev libglu1-mesa-dev libwayland-dev libxkbcommon-dev
+        wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
+        sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+        sudo apt-get update
+        sudo apt-get install -y vulkan-sdk
+    
+    - name: Configure CMake
+      run: |
+        cmake -G "Unix Makefiles" -Bbuild/linux \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DVKB_BUILD_TESTS=ON \
+          -DVKB_BUILD_SAMPLES=ON
+    
+    - name: Build
+      run: cmake --build build/linux --config Release --target all -j$(nproc)
+    
+    - name: Run Tests
+      run: |
+        cd build/linux
+        ctest --output-on-failure
+    
+    - name: Upload Test Results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results-linux
+        path: build/linux/Testing/Temporary/LastTest.log

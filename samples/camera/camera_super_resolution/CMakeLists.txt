@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 the "License";
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+set(VGF_LIB_ROOT "${CMAKE_SOURCE_DIR}/third_party/ai-ml-sdk-vgf-library")
+
+# Include directories
+set(VGF_LIB_INCLUDE_DIR "${VGF_LIB_ROOT}/include-c")
+include_directories(${VGF_LIB_INCLUDE_DIR})
+
+add_sample_with_tags(
+    ID "camera_super_resolution"
+    CATEGORY "camera"
+    AUTHOR "Arm Ltd."
+    NAME "Camera Super Resolution (XLSR)"
+    DESCRIPTION "Demonstrates machine learning inference using XLSR super resolution model"
+    LIBS
+        vgf
+    TAGS
+        "arm"
+    FILES
+        ${VGF_LIB_INCLUDE_DIR}/vgf/decoder.h
+        "../tensor_and_data_graph_common.h"
+        "../tensor_and_data_graph_common.cpp"
+        "camera_super_resolution.cpp"
+        "camera_super_resolution.h"
+    SHADER_FILES_GLSL
+        "camera/camera_super_resolution/camera_visualization.comp"
+    SHADER_FILES_SPVASM
+)

@@ -31,7 +31,6 @@ This project has multiple third-party dependencies, each of which may have indep
 * https://github.com/ARM-software/HWCPipe[HWCPipe]: Interface to mobile Hardware Counters
 * https://github.com/ocornut/imgui[dear imgui]: Immediate Mode Graphical User Interface
 * https://github.com/KhronosGroup/KTX-Software[KTX-Software]: Khronos Texture Library and Tools
-* https://github.com/KhronosGroup/OpenCL-Headers[OpenCL]: Khronos OpenCL-Headers
 * https://github.com/gabime/spdlog[spdlog]: Fast C{pp} logging library
 * https://github.com/KhronosGroup/SPIRV-Cross[SPIRV-Cross]: Parses and converts SPIR-V to other shader languages
 * https://github.com/nothings/stb[stb]: Single-file public domain (or MIT licensed) libraries
